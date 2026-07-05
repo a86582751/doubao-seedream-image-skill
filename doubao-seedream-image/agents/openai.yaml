@@ -1,0 +1,4 @@
+interface:
+  display_name: "Doubao Seedream Image"
+  short_description: "Generate and edit images with Doubao Seedream 5.0 Lite"
+  default_prompt: "Generate a character reference image with Doubao Seedream 5.0 Lite"
