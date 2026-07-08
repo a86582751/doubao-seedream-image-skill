@@ -1,31 +1,42 @@
-# Seedream 5.0 Lite API Quick Reference
+# Seedream Image API Quick Reference
 
 ## Endpoint
 
 - `POST https://ark.cn-beijing.volces.com/api/v3/images/generations`
 - Authorization: `Bearer <ARK API key>`
 
-## Model
+Returned image URLs are valid for 24 hours. Download immediately.
 
-- Primary: `doubao-seedream-5-0-260128`
-- Alias: `doubao-seedream-5-0-lite-260128`
+## Models
+
+- Seedream 5.0 Pro: `doubao-seedream-5-0-pro-260628`
+- Seedream 5.0 Lite: `doubao-seedream-5-0-260128`
+- Seedream 5.0 Lite alias: `doubao-seedream-5-0-lite-260128`
 - Seedream 4.5: `doubao-seedream-4-5-251128`
 - Seedream 4.0: `doubao-seedream-4-0-250828`
 
 ## Capability Matrix
 
-All three documented models support text-to-image, text-to-image sets, single/multi-image reference generation, single/multi-image-to-image sets, and streaming output.
+| Capability | 5.0 Pro | 5.0 Lite | 4.5 | 4.0 |
+|---|---:|---:|---:|---:|
+| Text-to-single-image | yes | yes | yes | yes |
+| Single-image-to-single-image | yes | yes | yes | yes |
+| Multi-reference-to-single-image | yes, 2-10 refs | yes, 2-14 refs | yes, 2-14 refs | yes, 2-14 refs |
+| Text/image-to-image-set | no | yes | yes | yes |
+| `sequential_image_generation` | no | yes | yes | yes |
+| Streaming | no | yes | yes | yes |
+| Web search tool | no | yes | no | no |
+| `output_format` | png/jpeg | png/jpeg | no, jpeg default | no, jpeg default |
+| Prompt optimization mode | standard | standard | standard | standard/fast |
 
-- Seedream 5.0 Lite: supports web search, 2K/3K/4K, png/jpeg output, standard prompt optimization.
-- Seedream 4.5: no web search in the official matrix, 2K/4K, jpeg output, standard prompt optimization.
-- Seedream 4.0: no web search in the official matrix, 1K/2K/4K, jpeg output, standard or fast prompt optimization.
+Do not pass unsupported parameters. Seedream 5.0 Pro rejects `sequential_image_generation`, `sequential_image_generation_options`, `stream`, and `tools`.
 
-## Basic Payload
+## Basic Single-Image Payload
 
 ```json
 {
-  "model": "doubao-seedream-5-0-260128",
-  "prompt": "image prompt",
+  "model": "doubao-seedream-5-0-pro-260628",
+  "prompt": "一张高端腕表产品海报，黑色陶瓷表壳，微距摄影，深色背景，侧逆光，画面干净",
   "size": "2K",
   "output_format": "png",
   "response_format": "url",
@@ -35,12 +46,12 @@ All three documented models support text-to-image, text-to-image sets, single/mu
 
 ## Image Reference Payload
 
-`image` may be one URL/string or an array of URLs/strings.
+`image` may be one URL/data URI string or an array of URL/data URI strings.
 
 ```json
 {
-  "model": "doubao-seedream-5-0-260128",
-  "prompt": "保持图1人物脸部特征，替换为图2服装",
+  "model": "doubao-seedream-5-0-pro-260628",
+  "prompt": "保持图一人物的脸部特征和姿态，让图一人物穿上图二的蓝色外套，背景为简洁摄影棚。",
   "image": ["https://...", "data:image/png;base64,..."],
   "size": "2K",
   "output_format": "png",
@@ -49,28 +60,16 @@ All three documented models support text-to-image, text-to-image sets, single/mu
 }
 ```
 
-For multi-reference fusion, set `sequential_image_generation` to `disabled` when one final image is expected.
+Use Pro for one final image. Use Lite/4.5/4.0 when the final output should be a related set.
+
+## Image Set Payload
+
+Only Seedream 5.0 Lite, 4.5, and 4.0 support this.
 
 ```json
 {
   "model": "doubao-seedream-5-0-260128",
-  "prompt": "将图1的服装换为图2的服装",
-  "image": ["https://...", "https://..."],
-  "sequential_image_generation": "disabled",
-  "size": "2K",
-  "output_format": "png",
-  "response_format": "url",
-  "watermark": false
-}
-```
-
-## Image Set Generation
-
-```json
-{
-  "model": "doubao-seedream-5-0-260128",
-  "prompt": "参考图1，生成4张同一角色的表情设定图",
-  "image": "https://...",
+  "prompt": "生成一组共4张同一角色表情设定图：平静、惊讶、微笑、警觉。保持角色脸部、服装和线性插画风格一致。",
   "size": "2K",
   "sequential_image_generation": "auto",
   "sequential_image_generation_options": {
@@ -85,22 +84,47 @@ For multi-reference fusion, set `sequential_image_generation` to `disabled` when
 Official set-generation patterns:
 
 - Text-to-image set: prompt describes multiple scenes; `sequential_image_generation=auto`.
-- Single-image-to-set: prompt says "参考图1..." and `image` is one URL/data URI.
+- Single-image-to-set: prompt says `参考图一...` and `image` is one URL/data URI.
 - Multi-reference-to-set: `image` is an array and `max_images` controls output count.
+- Reference image count plus generated image count must be no more than 15.
 
 ## Useful Parameters
 
-- `prompt`: required text instruction.
+- `model`: required model ID or endpoint ID.
+- `prompt`: required text instruction. Official guidance recommends no more than about 300 Chinese characters or 600 English words.
 - `image`: optional reference image URL, Base64 data URI, or array of those.
-- `size`: `2K`, `3K`, `4K`, or explicit `WIDTHxHEIGHT`.
+- `size`: preset (`1K`, `2K`, `3K`, `4K`) or explicit `WIDTHxHEIGHT`; do not mix both modes.
 - `response_format`: `url` or `b64_json`.
-- `output_format`: `png` or `jpeg`.
+- `output_format`: `png` or `jpeg`, only for 5.0 Pro/Lite.
 - `watermark`: `false` for clean production/reference assets.
-- `stream`: boolean. The local CLI uses non-streaming by default.
-- `sequential_image_generation`: `disabled` or `auto`.
-- `sequential_image_generation_options.max_images`: number of generated images for image sets.
-- `optimize_prompt_options.mode`: optional, e.g. `standard` or `fast` where supported.
-- `tools`: `[{"type": "web_search"}]` for Seedream 5.0 Lite current-information image generation.
+- `stream`: boolean, only for Lite/4.5/4.0.
+- `sequential_image_generation`: `disabled` or `auto`, only for Lite/4.5/4.0.
+- `sequential_image_generation_options.max_images`: 1-15, only when `sequential_image_generation=auto`.
+- `optimize_prompt_options.mode`: `standard`; 4.0 also supports `fast`.
+- `tools`: `[{"type": "web_search"}]`, only for Seedream 5.0 Lite.
+
+## Size Rules
+
+Preset mode:
+
+- 5.0 Pro: `1K`, `2K`.
+- 5.0 Lite: `2K`, `3K`, `4K`.
+- 4.5: `2K`, `4K`.
+- 4.0: `1K`, `2K`, `4K`.
+
+Explicit mode:
+
+- 5.0 Pro: pixel product between `1280x720` and `2048x2048`; aspect ratio [1/16, 16]; width and height must be multiples of 16.
+- 5.0 Lite and 4.5: pixel product between `2560x1440` and `4096x4096`; aspect ratio [1/16, 16].
+- 4.0: pixel product between `1280x720` and `4096x4096`; aspect ratio [1/16, 16].
+
+Reference image input rules:
+
+- Formats: jpeg, png, webp, bmp, tiff, gif, heic, heif.
+- Each image must be under 30 MB.
+- Aspect ratio must be [1/16, 16].
+- Width and height must each be greater than 14 px.
+- Pixel product must be no more than `6000x6000=36000000`.
 
 ## Web Search
 
@@ -116,52 +140,23 @@ The model decides whether to actually search. Check `usage.tool_usage.web_search
 
 ## Streaming
 
-Set `stream` to `true` for streaming image generation. Events include:
+Only Seedream 5.0 Lite, 4.5, and 4.0 support `stream: true`.
+
+Stream events can include:
 
 - `image_generation.partial_succeeded`: one finished image with URL.
 - `image_generation.partial_image`: one partial image with `b64_json`.
 - `image_generation.partial_failed`: partial failure with error.
 - `image_generation.completed`: final completion and usage.
 
-The local CLI can parse stream events and save returned URL or Base64 images.
-
 ## Prompt Advice
 
+Read `prompt-guide.md` before generation if the user's request is loose. Key rules:
+
 - Use concise coherent natural language.
-- Include subject, action, environment.
-- Add style, color, lighting, composition only when needed.
-- Official docs recommend prompts stay within about 300 Chinese characters or 600 English words; long prompts may dilute attention.
-
-## Recommended Seedream 5.0 Lite Sizes
-
-- 2K: `1:1` 2048x2048, `3:4` 1728x2304, `4:3` 2304x1728, `16:9` 2848x1600, `9:16` 1600x2848, `3:2` 2496x1664, `2:3` 1664x2496, `21:9` 3136x1344.
-- 3K: `1:1` 3072x3072, `3:4` 2592x3456, `4:3` 3456x2592, `16:9` 4096x2304, `9:16` 2304x4096, `3:2` 3744x2496, `2:3` 2496x3744, `21:9` 4704x2016.
-- 4K: `1:1` 4096x4096, `3:4` 3520x4704, `4:3` 4704x3520, `16:9` 5504x3040, `9:16` 3040x5504, `3:2` 4992x3328, `2:3` 3328x4992, `21:9` 6240x2656.
-
-Seedream 4.5 supports 2K and 4K from the same size table. Seedream 4.0 supports 1K, 2K, and 4K.
-
-Two sizing modes are supported and should not be mixed:
-
-- Preset mode: `size` is `1K`, `2K`, `3K`, or `4K`, with aspect ratio described in the prompt or selected by CLI `--ratio`.
-- Explicit mode: `size` is `WIDTHxHEIGHT`.
-
-## Limits
-
-- Input image formats: jpeg, png, webp, bmp, tiff, gif, heic, heif.
-- Image input size: under 30 MB each.
-- Maximum reference images: 14.
-- Reference images plus generated images: no more than 15 for group generation.
-- Single image pixel product: no more than `6000x6000=36000000`.
-- Returned image URLs are retained for 24 hours. Download immediately.
-
-## Storybook / Comic Workflow
-
-Official storybook guidance can be adapted locally:
-
-1. Use a planning model to produce JSON with `title`, `summary`, `scenes`, and `scenes_detail`.
-2. Use `scenes_detail` as image prompts.
-3. Convert the scene array into one long prompt.
-4. Append a cover request and instruction to remove image text when needed.
-5. Generate a set of related images with `sequential_image_generation=auto`.
-
-The local `storyboard` command implements the image-generation part of this flow.
+- State subject, action, environment, and use case.
+- Add style, color, lighting, and composition only when they matter.
+- Put exact visible text in double quotes.
+- For editing, name the target object, the desired operation, and what must stay unchanged.
+- For multiple input images, refer to `图一`, `图二`, `图三`, and assign each image a role.
+- For image sets, request `一组`, `一套`, `系列`, or a concrete count and ask for consistent character/style/color/camera language.

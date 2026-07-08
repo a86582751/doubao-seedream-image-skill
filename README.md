@@ -1,18 +1,20 @@
 # Doubao Seedream Image Skill for Codex
 
-A Codex skill for generating, editing, batching, and downloading images with Volcano Ark Doubao Seedream image models, including Doubao Seedream 5.0 Lite.
+A Codex skill for generating, editing, batching, prompt-optimizing, and downloading images with Volcano Ark Doubao Seedream image models, including Doubao Seedream 5.0 Pro and 5.0 Lite.
 
 It is especially useful as a companion to long-form AI video workflows: for multi-character stories, roleplay adaptations, worldbuilding documents, recurring outfits, or important props, Codex can first create stable character/reference images with Seedream and then pass them to Seedance video generation.
 
-Keywords: Codex skill, Doubao Seedream 5.0 Lite, Volcano Ark, AI image generation, character reference, role sheet, image-to-image, storyboard, story-to-video, Seedance companion.
+Keywords: Codex skill, Doubao Seedream 5.0 Pro, Doubao Seedream 5.0 Lite, Volcano Ark, AI image generation, character reference, role sheet, image-to-image, storyboard, story-to-video, Seedance companion.
 
 ## What It Does
 
 - Generate text-to-image outputs with Seedream.
+- Generate high-quality single images with Seedream 5.0 Pro.
 - Create character reference portraits and role sheets for Seedance videos.
 - Generate storyboard panels or image sets from multiple scene descriptions.
 - Use one or more reference images for image-to-image and multi-reference fusion.
 - Support web-search-enhanced image generation when the selected model supports it.
+- Compose Seedream-ready prompts from rough or structured visual requirements.
 - Run dry-run configuration checks with masked API keys.
 
 ## Repository Layout
@@ -22,6 +24,7 @@ doubao-seedream-image/
   SKILL.md
   agents/openai.yaml
   references/api-quickref.md
+  references/prompt-guide.md
   scripts/seedream_image.py
 ```
 
@@ -71,6 +74,27 @@ python doubao-seedream-image/scripts/seedream_image.py character \
   --description "28-year-old spacecraft engineer, short black hair, silver uniform, calm expression" \
   --ratio 3:4 \
   --output-dir outputs
+```
+
+Generate with Seedream 5.0 Pro:
+
+```bash
+python doubao-seedream-image/scripts/seedream_image.py generate \
+  --model pro \
+  --prompt "premium product poster for a black ceramic wristwatch, macro photography, dark background, rim lighting, clean composition" \
+  --size 2K \
+  --ratio 1:1 \
+  --dry-run
+```
+
+Optimize a prompt locally:
+
+```bash
+python doubao-seedream-image/scripts/seedream_image.py optimize-prompt \
+  --task edit \
+  --prompt "replace the tallest panda with a pink opera costume" \
+  --edit-target "the tallest panda in the image" \
+  --keep "pose, expression, background, and other pandas remain unchanged"
 ```
 
 Generate a storyboard:

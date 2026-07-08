@@ -24,49 +24,105 @@ ENV_FILES = [
 ]
 DEFAULT_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
 DEFAULT_MODEL = "doubao-seedream-5-0-260128"
+PRO_MODEL = "doubao-seedream-5-0-pro-260628"
+LITE_MODEL = "doubao-seedream-5-0-260128"
 DEFAULT_IMAGE_PATH = "/images/generations"
 MODEL_ALIASES = {
-    "5": "doubao-seedream-5-0-260128",
-    "5.0": "doubao-seedream-5-0-260128",
+    "5": LITE_MODEL,
+    "5.0": LITE_MODEL,
+    "5-pro": PRO_MODEL,
+    "5.0-pro": PRO_MODEL,
+    "5.0pro": PRO_MODEL,
+    "5pro": PRO_MODEL,
+    "pro": PRO_MODEL,
+    "seedream-pro": PRO_MODEL,
+    "seedream-5-pro": PRO_MODEL,
+    "seedream-5.0-pro": PRO_MODEL,
     "5-lite": "doubao-seedream-5-0-lite-260128",
     "5.0-lite": "doubao-seedream-5-0-lite-260128",
+    "5-l": "doubao-seedream-5-0-lite-260128",
+    "5.0-l": "doubao-seedream-5-0-lite-260128",
     "lite": "doubao-seedream-5-0-lite-260128",
     "4.5": "doubao-seedream-4-5-251128",
     "4": "doubao-seedream-4-0-250828",
     "4.0": "doubao-seedream-4-0-250828",
 }
 MODEL_PROFILES = {
-    "doubao-seedream-5-0-260128": {
+    PRO_MODEL: {
+        "family": "5.0-pro",
+        "label": "Doubao Seedream 5.0 Pro",
+        "sizes": ["1K", "2K"],
+        "formats": ["png", "jpeg"],
+        "output_format_param": True,
+        "optimize_modes": ["standard"],
+        "web_search": False,
+        "stream": False,
+        "sequential": False,
+        "max_reference_images": 10,
+        "max_generated_images": 1,
+        "pixel_min": 1280 * 720,
+        "pixel_max": 2048 * 2048,
+        "explicit_size_multiple": 16,
+    },
+    LITE_MODEL: {
         "family": "5.0-lite",
         "label": "Doubao Seedream 5.0 Lite",
         "sizes": ["2K", "3K", "4K"],
         "formats": ["png", "jpeg"],
+        "output_format_param": True,
         "optimize_modes": ["standard"],
         "web_search": True,
+        "stream": True,
+        "sequential": True,
+        "max_reference_images": 14,
+        "max_generated_images": 15,
+        "pixel_min": 2560 * 1440,
+        "pixel_max": 4096 * 4096,
     },
     "doubao-seedream-5-0-lite-260128": {
         "family": "5.0-lite",
         "label": "Doubao Seedream 5.0 Lite",
         "sizes": ["2K", "3K", "4K"],
         "formats": ["png", "jpeg"],
+        "output_format_param": True,
         "optimize_modes": ["standard"],
         "web_search": True,
+        "stream": True,
+        "sequential": True,
+        "max_reference_images": 14,
+        "max_generated_images": 15,
+        "pixel_min": 2560 * 1440,
+        "pixel_max": 4096 * 4096,
     },
     "doubao-seedream-4-5-251128": {
         "family": "4.5",
         "label": "Doubao Seedream 4.5",
         "sizes": ["2K", "4K"],
         "formats": ["jpeg"],
+        "output_format_param": False,
         "optimize_modes": ["standard"],
         "web_search": False,
+        "stream": True,
+        "sequential": True,
+        "max_reference_images": 14,
+        "max_generated_images": 15,
+        "pixel_min": 2560 * 1440,
+        "pixel_max": 4096 * 4096,
     },
     "doubao-seedream-4-0-250828": {
         "family": "4.0",
         "label": "Doubao Seedream 4.0",
         "sizes": ["1K", "2K", "4K"],
         "formats": ["jpeg"],
+        "output_format_param": False,
         "optimize_modes": ["standard", "fast"],
         "web_search": False,
+        "stream": True,
+        "sequential": True,
+        "max_reference_images": 14,
+        "max_generated_images": 15,
+        "pixel_min": 1280 * 720,
+        "pixel_max": 4096 * 4096,
     },
 }
 SIZE_PRESETS = {
@@ -102,6 +158,11 @@ SIZE_PRESETS = {
     ("4K", "3:2"): "4992x3328",
     ("4K", "2:3"): "3328x4992",
     ("4K", "21:9"): "6240x2656",
+}
+MODEL_SIZE_PRESET_OVERRIDES = {
+    ("4.0", "1K", "16:9"): "1280x720",
+    ("4.0", "1K", "9:16"): "720x1280",
+    ("4.0", "1K", "21:9"): "1512x648",
 }
 
 
@@ -341,6 +402,105 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def compact_spaces(text: str) -> str:
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def split_text_items(value: str) -> list[str]:
+    items: list[str] = []
+    for item in re.split(r"[;\n；]+", value or ""):
+        item = item.strip(" ,，。")
+        if item:
+            items.append(item)
+    return items
+
+
+def quote_visible_text(text: str) -> str:
+    quoted = text
+    for mark in re.findall(r"[“\"]([^”\"]+)[”\"]", text):
+        if mark and f"“{mark}”" not in quoted:
+            quoted = quoted.replace(mark, f"“{mark}”")
+    return quoted
+
+
+def optimize_prompt_text(args: argparse.Namespace) -> str:
+    base = read_text_or_literal(args.prompt).strip() if args.prompt else ""
+    parts: list[str] = []
+    mode = args.task
+    if mode == "auto":
+        if args.image and args.reference:
+            mode = "reference"
+        elif args.image:
+            mode = "edit"
+        else:
+            mode = "text"
+
+    if mode == "set":
+        count_text = f"生成一组共{args.count}张内容关联的图片" if args.count else "生成一组内容关联的图片"
+        parts.append(count_text)
+        parts.append("保持角色、视觉风格、色彩和镜头语言统一")
+    elif mode == "edit":
+        parts.append("对参考图进行图像编辑")
+        if args.keep:
+            parts.append(f"保持不变：{args.keep}")
+        if args.edit_target:
+            parts.append(f"编辑对象：{args.edit_target}")
+    elif mode == "reference":
+        parts.append("基于参考图生成新画面")
+        if args.reference:
+            parts.append(f"参考并保留：{args.reference}")
+        if args.keep:
+            parts.append(f"保持不变：{args.keep}")
+    elif mode == "logo":
+        parts.append("设计一个可用作品牌标识的 logo")
+    elif mode == "ui":
+        parts.append("渲染为高保真的 UI 界面")
+        if args.image:
+            parts.append("遵循参考图中的布局和文字示意")
+    elif mode == "infographic":
+        parts.append("绘制一张信息图")
+    elif mode == "character":
+        parts.append("生成清晰可复用的人物设定照")
+
+    if base:
+        parts.append(quote_visible_text(base))
+    if args.subject:
+        parts.append(f"主体：{args.subject}")
+    if args.action:
+        parts.append(f"行为/变化：{args.action}")
+    if args.environment:
+        parts.append(f"环境：{args.environment}")
+    if args.scene_type:
+        parts.append(f"图像用途和类型：{args.scene_type}")
+    if args.style:
+        parts.append(f"风格：{args.style}")
+    if args.color:
+        parts.append(f"色彩：{args.color}")
+    if args.lighting:
+        parts.append(f"光影：{args.lighting}")
+    if args.composition:
+        parts.append(f"构图：{args.composition}")
+    if args.text:
+        parts.append(f"需要准确渲染的文字：{quote_visible_text(args.text)}")
+    for item in split_text_items(args.details):
+        parts.append(item)
+
+    negatives = split_text_items(args.avoid)
+    if args.no_text:
+        negatives.append("不要生成文字")
+    if args.no_watermark:
+        negatives.append("不要水印")
+    if negatives:
+        parts.append("避免：" + "、".join(dict.fromkeys(negatives)))
+
+    prompt = "。".join(part.rstrip("。") for part in parts if part.strip())
+    if prompt and not prompt.endswith("。"):
+        prompt += "。"
+    if args.max_chars and len(prompt) > args.max_chars:
+        prompt = prompt[: args.max_chars].rstrip("，,；;。 ") + "。"
+    return compact_spaces(prompt)
+
+
 @dataclass
 class Config:
     api_key: str
@@ -370,12 +530,24 @@ class Config:
         }
 
 
-def resolve_size(size: str, ratio: str) -> str:
+def is_explicit_size(value: str) -> bool:
+    return bool(re.match(r"^\d+x\d+$", value.strip(), flags=re.I))
+
+
+def parse_explicit_size(value: str) -> tuple[int, int] | None:
+    if not is_explicit_size(value):
+        return None
+    width_text, height_text = value.lower().split("x", 1)
+    return int(width_text), int(height_text)
+
+
+def resolve_size(size: str, ratio: str, model: str = "") -> str:
     raw = size.strip()
-    if re.match(r"^\d+x\d+$", raw, flags=re.I):
+    if is_explicit_size(raw):
         return raw.lower()
     normalized = raw.upper()
-    return SIZE_PRESETS.get((normalized, ratio), normalized)
+    profile = model_profile(normalize_model(model) or DEFAULT_MODEL)
+    return MODEL_SIZE_PRESET_OVERRIDES.get((profile["family"], normalized, ratio), SIZE_PRESETS.get((normalized, ratio), normalized))
 
 
 def validate_payload(payload: dict[str, Any]) -> list[str]:
@@ -386,19 +558,41 @@ def validate_payload(payload: dict[str, Any]) -> list[str]:
     size = str(payload.get("size") or "")
     if size.upper() in {"1K", "2K", "3K", "4K"} and size.upper() not in profile["sizes"]:
         warnings.append(f"{profile['label']} is not documented for size {size}. Supported presets: {', '.join(profile['sizes'])}.")
+    explicit_size = parse_explicit_size(size)
+    if explicit_size:
+        width, height = explicit_size
+        pixels = width * height
+        ratio = width / height
+        if not (profile["pixel_min"] <= pixels <= profile["pixel_max"]):
+            warnings.append(f"{profile['label']} explicit size pixel product should be between {profile['pixel_min']} and {profile['pixel_max']}.")
+        if not ((1 / 16) <= ratio <= 16):
+            warnings.append(f"{profile['label']} explicit size aspect ratio must be between 1:16 and 16:1.")
+        multiple = profile.get("explicit_size_multiple")
+        if multiple and (width % multiple or height % multiple):
+            warnings.append(f"{profile['label']} explicit width and height must be multiples of {multiple}.")
     fmt = str(payload.get("output_format") or "").lower()
     if fmt and fmt not in profile["formats"]:
         warnings.append(f"{profile['label']} is documented for output format(s): {', '.join(profile['formats'])}.")
+    if "output_format" in payload and not profile.get("output_format_param"):
+        warnings.append(f"{profile['label']} does not support custom output_format; omit this parameter.")
     if payload.get("tools") and not profile.get("web_search"):
         warnings.append(f"{profile['label']} is not documented with web_search support.")
+    if "stream" in payload and not profile.get("stream"):
+        warnings.append(f"{profile['label']} does not support stream; omit this parameter.")
+    if payload.get("sequential_image_generation") and not profile.get("sequential"):
+        warnings.append(f"{profile['label']} does not support sequential_image_generation; omit this parameter.")
+    if payload.get("sequential_image_generation_options") and not profile.get("sequential"):
+        warnings.append(f"{profile['label']} does not support sequential_image_generation_options; omit this parameter.")
     mode = ((payload.get("optimize_prompt_options") or {}) if isinstance(payload.get("optimize_prompt_options"), dict) else {}).get("mode")
     if mode and mode not in profile["optimize_modes"]:
         warnings.append(f"{profile['label']} supports optimize prompt mode(s): {', '.join(profile['optimize_modes'])}.")
     images = payload.get("image")
     image_count = len(images) if isinstance(images, list) else (1 if images else 0)
     max_images = ((payload.get("sequential_image_generation_options") or {}) if isinstance(payload.get("sequential_image_generation_options"), dict) else {}).get("max_images") or 1
-    if image_count > 14:
-        warnings.append("Official docs allow at most 14 reference images.")
+    if image_count > profile["max_reference_images"]:
+        warnings.append(f"{profile['label']} allows at most {profile['max_reference_images']} reference images.")
+    if int(max_images) > profile["max_generated_images"]:
+        warnings.append(f"{profile['label']} can generate at most {profile['max_generated_images']} image(s) in one request.")
     if payload.get("sequential_image_generation") == "auto" and image_count + int(max_images) > 15:
         warnings.append("For group generation, reference images plus generated images must be no more than 15.")
     prompt = str(payload.get("prompt") or "")
@@ -414,7 +608,7 @@ def make_payload(args: argparse.Namespace, config: Config, prompt: str) -> dict[
             raise ValueError("--payload-json must be a JSON object.")
         payload.setdefault("model", args.model or config.model)
         return payload
-    model = normalize_model(args.model) or config.model
+    model = normalize_model(args.model or config.model) or DEFAULT_MODEL
     output_format = args.output_format
     profile = model_profile(model)
     if not getattr(args, "output_format_explicit", False) and output_format not in profile["formats"]:
@@ -422,24 +616,42 @@ def make_payload(args: argparse.Namespace, config: Config, prompt: str) -> dict[
     payload: dict[str, Any] = {
         "model": model,
         "prompt": prompt,
-        "size": resolve_size(args.size, args.ratio),
-        "output_format": output_format,
+        "size": resolve_size(args.size, args.ratio, model),
         "response_format": args.response_format,
         "watermark": bool(args.watermark),
-        "stream": bool(args.stream),
     }
+    if profile.get("output_format_param"):
+        payload["output_format"] = output_format
+    if args.stream:
+        if not profile.get("stream"):
+            raise ValueError(f"{profile['label']} does not support --stream.")
+        payload["stream"] = True
     images = [image_to_data_uri(value) for value in (args.image or [])]
+    if len(images) > profile["max_reference_images"]:
+        raise ValueError(f"{profile['label']} allows at most {profile['max_reference_images']} reference images.")
     if len(images) == 1:
         payload["image"] = images[0]
     elif images:
         payload["image"] = images
     if args.sequential:
+        if not profile.get("sequential"):
+            raise ValueError(f"{profile['label']} does not support --sequential or image-set generation.")
         payload["sequential_image_generation"] = args.sequential
     if args.max_images:
+        if not profile.get("sequential"):
+            raise ValueError(f"{profile['label']} generates one image per request and does not support --max-images.")
+        if args.max_images > profile["max_generated_images"]:
+            raise ValueError(f"{profile['label']} can generate at most {profile['max_generated_images']} image(s) in one request.")
+        if images and len(images) + args.max_images > 15:
+            raise ValueError("For group generation, reference images plus generated images must be no more than 15.")
         payload["sequential_image_generation_options"] = {"max_images": args.max_images}
     if args.optimize_prompt_mode:
+        if args.optimize_prompt_mode not in profile["optimize_modes"]:
+            raise ValueError(f"{profile['label']} supports optimize prompt mode(s): {', '.join(profile['optimize_modes'])}.")
         payload["optimize_prompt_options"] = {"mode": args.optimize_prompt_mode}
     if args.web_search:
+        if not profile.get("web_search"):
+            raise ValueError(f"{profile['label']} does not support --web-search.")
         payload["tools"] = [{"type": "web_search"}]
     if args.extra_json:
         extra = json.loads(args.extra_json)
@@ -478,9 +690,11 @@ def run_generation(args: argparse.Namespace, prompt: str) -> int:
     if not args.no_download:
         for index, image in enumerate(images, 1):
             if image.get("url"):
-                local_paths.append(str(download_url(image["url"], output_dir, args.label or "seedream", index, args.output_format)))
+                output_format = str(payload.get("output_format") or model_profile(str(payload.get("model") or DEFAULT_MODEL))["formats"][0])
+                local_paths.append(str(download_url(image["url"], output_dir, args.label or "seedream", index, output_format)))
             elif image.get("b64_json"):
-                local_paths.append(str(save_b64_image(image["b64_json"], output_dir, args.label or "seedream", index, args.output_format)))
+                output_format = str(payload.get("output_format") or model_profile(str(payload.get("model") or DEFAULT_MODEL))["formats"][0])
+                local_paths.append(str(save_b64_image(image["b64_json"], output_dir, args.label or "seedream", index, output_format)))
     output_dir.mkdir(parents=True, exist_ok=True)
     result = {"warnings": warnings, "images": images, "local_paths": local_paths, "response": data}
     result_path = output_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{safe_name(args.label or 'seedream')}.json"
@@ -497,6 +711,20 @@ def command_generate(args: argparse.Namespace) -> int:
         if not args.payload_json:
             raise ValueError("--prompt is required.")
     return run_generation(args, args.prompt)
+
+
+def command_optimize_prompt(args: argparse.Namespace) -> int:
+    prompt = optimize_prompt_text(args)
+    if not prompt:
+        raise ValueError("Provide --prompt or structured prompt fields.")
+    result = {"prompt": prompt, "length": len(prompt)}
+    if args.output_file:
+        path = Path(args.output_file)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(prompt, encoding="utf-8")
+        result["output_file"] = str(path)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 def command_character(args: argparse.Namespace) -> int:
@@ -560,8 +788,8 @@ def command_storyboard(args: argparse.Namespace) -> int:
 
 def add_generation_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--model", default="")
-    parser.add_argument("--size", default="2K", help="2K, 3K, 4K, or WIDTHxHEIGHT.")
-    parser.add_argument("--ratio", default="3:4", help="Used only when --size is 2K/3K/4K.")
+    parser.add_argument("--size", default="2K", help="1K, 2K, 3K, 4K, or WIDTHxHEIGHT.")
+    parser.add_argument("--ratio", default="3:4", help="Used only when --size is a preset such as 1K/2K/3K/4K.")
     parser.add_argument("--output-format", default="png", choices=["png", "jpeg"])
     parser.add_argument("--response-format", default="url", choices=["url", "b64_json"])
     parser.add_argument("--watermark", action=argparse.BooleanOptionalAction, default=env_bool("SEEDREAM_WATERMARK", False))
@@ -581,9 +809,38 @@ def add_generation_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--no-download", action="store_true")
 
 
+def add_prompt_optimizer_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--prompt", default="", help="Original rough prompt text or a path to a UTF-8 prompt file.")
+    parser.add_argument("--task", default="auto", choices=["auto", "text", "edit", "reference", "set", "logo", "ui", "infographic", "character"])
+    parser.add_argument("--image", action="append", help="Reference image marker/path; used to infer edit/reference mode.")
+    parser.add_argument("--subject", default="")
+    parser.add_argument("--action", default="")
+    parser.add_argument("--environment", default="")
+    parser.add_argument("--scene-type", default="", help="Use case or image type, such as poster, logo, wallpaper, UI screen, or storyboard.")
+    parser.add_argument("--style", default="")
+    parser.add_argument("--color", default="")
+    parser.add_argument("--lighting", default="")
+    parser.add_argument("--composition", default="")
+    parser.add_argument("--text", default="", help="Visible text that must appear in the image; the optimizer keeps it quoted.")
+    parser.add_argument("--reference", default="", help="Features to extract and preserve from reference images.")
+    parser.add_argument("--edit-target", default="", help="Object or region to edit in the input image.")
+    parser.add_argument("--keep", default="", help="Elements that should remain unchanged.")
+    parser.add_argument("--details", default="", help="Extra details separated by semicolons or new lines.")
+    parser.add_argument("--avoid", default="", help="Negative requirements separated by semicolons or new lines.")
+    parser.add_argument("--count", type=int, default=0, help="Requested image count for set prompts.")
+    parser.add_argument("--no-text", action="store_true")
+    parser.add_argument("--no-watermark", action="store_true")
+    parser.add_argument("--max-chars", type=int, default=0, help="Optional hard character limit after composition.")
+    parser.add_argument("--output-file", default="")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Generate images with Doubao Seedream 5.0 Lite on Volcano Ark.")
+    parser = argparse.ArgumentParser(description="Generate images with Doubao Seedream on Volcano Ark.")
     sub = parser.add_subparsers(dest="command", required=True)
+
+    prompt_opt = sub.add_parser("optimize-prompt", help="Compose a Seedream-ready prompt from rough or structured requirements.")
+    add_prompt_optimizer_args(prompt_opt)
+    prompt_opt.set_defaults(func=command_optimize_prompt)
 
     gen = sub.add_parser("generate", help="Generate or edit images.")
     gen.add_argument("--prompt", default="")
